@@ -133,6 +133,35 @@ A aplicação normalmente ficará disponível em `http://localhost:5173` (ou por
 
 ---
 
+## Executando com Docker
+
+É possível rodar o frontend em um container. O build é feito na imagem e o servidor serve os arquivos estáticos na porta **8080**.
+
+### Build da imagem
+
+```bash
+docker build -t braincash-frontend .
+```
+
+### Rodar o container
+
+As variáveis de ambiente do `.env` podem ser passadas em **runtime** com a opção `-e` (sem precisar reconstruir a imagem):
+
+```bash
+# URL da API (equivalente a VITE_API_URL no .env)
+docker run -p 8080:8080 -e API_URL=http://localhost:8000/api braincash-frontend
+```
+
+Ou usando o mesmo nome da variável do `.env`:
+
+```bash
+docker run -p 8080:8080 -e VITE_API_URL=http://backend:8000/api braincash-frontend
+```
+
+O entrypoint do container gera um `config.js` na inicialização a partir dessas variáveis, permitindo alterar a URL da API sem novo build.
+
+---
+
 ## Scripts disponíveis
 
 No arquivo `package.json`:
