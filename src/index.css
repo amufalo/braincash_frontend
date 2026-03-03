@@ -1,0 +1,193 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brain Cash Design System - Tema Confiança e Inteligência (fincontrol-pro-suite) */
+
+@layer base {
+  /* Tema padrão (igual ao :root do fincontrol) */
+  :root,
+  [data-theme="default"] {
+    --background: 209 100% 97%; /* F5F9FF - Branco Gelo */
+    --foreground: 215 25% 27%;
+
+    --primary: 215 76% 21%; /* 0D285B - Azul Meia-Noite */
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 158 63% 47%; /* 28D8A4 - Verde Menta */
+
+    --success: 158 63% 47%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 158 63% 95%;
+
+    --danger: 357 100% 67%; /* FF5A5F - Vermelho Coral */
+    --danger-foreground: 0 0% 100%;
+    --danger-light: 357 100% 97%;
+
+    --warning: 35 85% 55%;
+    --warning-foreground: 0 0% 100%;
+    --warning-light: 35 100% 96%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 76% 21%;
+    --card-hover: 209 100% 96%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 76% 21%;
+
+    --secondary: 209 100% 94%;
+    --secondary-foreground: 215 25% 27%;
+
+    --muted: 209 100% 96%;
+    --muted-foreground: 215 21% 58%; /* 8A9CB8 - Cinza Azulado */
+
+    --accent: 209 100% 94%;
+    --accent-foreground: 215 25% 27%;
+
+    --destructive: 357 100% 67%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 209 100% 90%;
+    --input: 209 100% 90%;
+    --ring: 215 76% 21%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(215 76% 21%), hsl(158 63% 47%));
+    --gradient-success: linear-gradient(135deg, hsl(158 63% 47%), hsl(158 63% 57%));
+    --gradient-hero: linear-gradient(135deg, hsl(215 76% 21%) 0%, hsl(158 63% 47%) 50%, hsl(209 100% 97%) 100%);
+
+    --shadow-financial: 0 4px 20px -4px hsl(215 76% 21% / 0.15);
+    --shadow-card: 0 2px 10px -2px hsl(0 0% 0% / 0.05);
+    --shadow-success: 0 4px 20px -4px hsl(158 63% 47% / 0.15);
+
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  /* Tema claro (neutro) */
+  [data-theme="light"] {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --card-hover: 210 40% 96%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --primary-glow: 222.2 47.4% 11.2%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 142 71% 95%;
+
+    --danger: 0 84.2% 60.2%;
+    --danger-foreground: 210 40% 98%;
+    --danger-light: 0 84.2% 97%;
+
+    --warning: 35 85% 55%;
+    --warning-foreground: 0 0% 100%;
+    --warning-light: 35 100% 96%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  /* Tema escuro (igual ao .dark do fincontrol) */
+  [data-theme="dark"] {
+    --background: 215 76% 8%;
+    --foreground: 0 0% 95%;
+
+    --card: 215 50% 12%;
+    --card-foreground: 0 0% 95%;
+    --card-hover: 215 50% 15%;
+
+    --popover: 215 50% 12%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 158 63% 47%;
+    --primary-foreground: 215 76% 21%;
+    --primary-glow: 158 63% 57%;
+
+    --secondary: 215 30% 18%;
+    --secondary-foreground: 0 0% 85%;
+
+    --muted: 215 30% 15%;
+    --muted-foreground: 215 21% 70%;
+
+    --accent: 215 30% 20%;
+    --accent-foreground: 0 0% 85%;
+
+    --success: 158 63% 47%;
+    --success-foreground: 215 76% 21%;
+    --success-light: 158 50% 15%;
+
+    --danger: 357 100% 67%;
+    --danger-foreground: 0 0% 100%;
+    --danger-light: 357 60% 15%;
+
+    --destructive: 357 100% 67%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 30% 20%;
+    --input: 215 30% 20%;
+    --ring: 158 63% 47%;
+
+    --sidebar-background: 0 0% 10%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 142 60% 35%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 0 0% 18%;
+    --sidebar-ring: 142 60% 35%;
+  }
+}
+
+/* Gradiente na tela de login (tema padrão) */
+.login-page-gradient {
+  background: linear-gradient(to right, #1E5078 0%, #64E696 100%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif, "Segoe UI", Roboto, sans-serif;
+  }
+}

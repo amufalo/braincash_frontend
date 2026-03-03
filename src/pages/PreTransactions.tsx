@@ -1,0 +1,840 @@
+import { useState, useCallback, useMemo } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import api from "@/lib/axios"
+import { Button } from "@/components/ui/button"
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Plus, CheckCircle, Trash2 } from "lucide-react"
+import { toast } from "sonner"
+import { formatCurrency, formatDate } from "@/lib/utils"
+import { PAYMENT_METHODS, CONDITIONS, type PaymentMethodId, type ConditionId } from "@/lib/transaction-form"
+
+interface PreTransaction {
+    id: number
+    description: string
+    amount: string
+    transaction_type: string
+    transaction_date: string
+    category_id: number | null
+    account_id: number | null
+    card_id: number | null
+    status: string
+    created_at: string
+    notes?: string | null
+}
+
+const defaultProcessFormState = {
+    description: "",
+    amount: "0",
+    transaction_type: "EXPENSE" as "EXPENSE" | "INCOME",
+    transaction_date: new Date().toISOString().split("T")[0],
+    category_id: "",
+    account_id: "",
+    card_id: "",
+    payment_method: "" as PaymentMethodId | "",
+    condition: "a_vista" as ConditionId,
+    installments: "1",
+    recurrence_months: "1",
+    is_paid: true,
+    notes: "",
+}
+
+export default function PreTransactions() {
+    const [isOpen, setIsOpen] = useState(false)
+    const [toDelete, setToDelete] = useState<PreTransaction | null>(null)
+    const [processOpen, setProcessOpen] = useState(false)
+    const [preTransactionToProcess, setPreTransactionToProcess] = useState<PreTransaction | null>(null)
+    const [processFormData, setProcessFormData] = useState(defaultProcessFormState)
+    const [formData, setFormData] = useState({
+        description: "",
+        amount: "0",
+        transaction_type: "EXPENSE",
+        transaction_date: new Date().toISOString().split("T")[0],
+        category_id: "" as string,
+        account_id: "" as string,
+        card_id: "" as string,
+        notes: "",
+    })
+
+    const queryClient = useQueryClient()
+
+    const { data: list = [], isLoading } = useQuery({
+        queryKey: ["pre-transactions"],
+        queryFn: async () => {
+            const res = await api.get<PreTransaction[]>("/pre-transactions/")
+            return res.data
+        },
+    })
+
+    const { data: categories = [] } = useQuery({
+        queryKey: ["categories"],
+        queryFn: async () => {
+            const res = await api.get("/categories/")
+            return res.data
+        },
+    })
+
+    const { data: accounts = [] } = useQuery({
+        queryKey: ["accounts"],
+        queryFn: async () => {
+            const res = await api.get("/accounts/")
+            return res.data
+        },
+    })
+
+    const { data: cards = [] } = useQuery({
+        queryKey: ["cards"],
+        queryFn: async () => {
+            const res = await api.get("/cards/")
+            return res.data
+        },
+    })
+
+    const createMutation = useMutation({
+        mutationFn: async (data: Record<string, unknown>) =>
+            api.post("/pre-transactions/", {
+                ...data,
+                amount: Number(data.amount),
+                transaction_date: (data.transaction_date as string) + "T12:00:00Z",
+                category_id: data.category_id ? Number(data.category_id) : null,
+                account_id: data.account_id ? Number(data.account_id) : null,
+                card_id: data.card_id ? Number(data.card_id) : null,
+            }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions"] })
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions-count"] })
+            setIsOpen(false)
+            toast.success("Pré-lançamento criado!")
+            setFormData({
+                description: "",
+                amount: "0",
+                transaction_type: "EXPENSE",
+                transaction_date: new Date().toISOString().split("T")[0],
+                category_id: "",
+                account_id: "",
+                card_id: "",
+                notes: "",
+            })
+        },
+        onError: (err: { response?: { data?: { detail?: string } } }) => {
+            toast.error(err.response?.data?.detail || "Erro ao criar")
+        },
+    })
+
+    /** Create transaction from form, then mark pre-transaction as processed (CONVERTED). */
+    const processPreTransactionMutation = useMutation({
+        mutationFn: async ({
+            payload,
+            preTransactionId,
+        }: {
+            payload: Record<string, unknown>
+            preTransactionId: number
+        }) => {
+            await api.post("/transactions/", payload)
+            await api.put(`/pre-transactions/${preTransactionId}`, {
+                status: "CONVERTED",
+            })
+        },
+        onSuccess: (_, { preTransactionId }) => {
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions"] })
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions-count"] })
+            queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] })
+            queryClient.invalidateQueries({ queryKey: ["transactions"] })
+            queryClient.invalidateQueries({ queryKey: ["accounts"] })
+            queryClient.invalidateQueries({ queryKey: ["cards"] })
+            setProcessOpen(false)
+            setPreTransactionToProcess(null)
+            setProcessFormData({ ...defaultProcessFormState })
+            toast.success("Pré-lançamento processado!")
+        },
+        onError: (err: { response?: { data?: { detail?: string } } }) => {
+            toast.error(err.response?.data?.detail ?? "Erro ao processar")
+        },
+    })
+
+    const deleteMutation = useMutation({
+        mutationFn: async (id: number) => api.delete(`/pre-transactions/${id}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions"] })
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions-count"] })
+            setToDelete(null)
+            toast.success("Pré-lançamento removido")
+        },
+        onError: (err: { response?: { data?: { detail?: string } } }) => {
+            toast.error(err.response?.data?.detail || "Erro ao remover")
+        },
+    })
+
+    const pending = list.filter((x) => x.status === "PENDING")
+
+    const handleSubmit = () => {
+        if (!formData.description.trim()) {
+            toast.error("Descrição é obrigatória")
+            return
+        }
+        if (Number(formData.amount) <= 0) {
+            toast.error("Valor deve ser maior que zero")
+            return
+        }
+        createMutation.mutate(formData as unknown as Record<string, unknown>)
+    }
+
+    const paymentMethod = processFormData.payment_method
+        ? PAYMENT_METHODS.find((p) => p.id === processFormData.payment_method)
+        : null
+    const destination = paymentMethod?.destination ?? "account"
+    const conditionConfig = CONDITIONS.find((c) => c.id === processFormData.condition) ?? CONDITIONS[0]
+
+    const applyProcessPaymentMethodDefaults = useCallback((methodId: PaymentMethodId) => {
+        const method = PAYMENT_METHODS.find((m) => m.id === methodId)
+        if (!method) return
+        setProcessFormData((prev) => ({
+            ...prev,
+            payment_method: methodId,
+            account_id: method.destination === "account" ? prev.account_id : "",
+            card_id: method.destination === "card" ? prev.card_id : "",
+            is_paid: method.isPaidByDefault,
+        }))
+    }, [])
+
+    const openProcessDialog = useCallback((pt: PreTransaction) => {
+        setPreTransactionToProcess(pt)
+        const method = pt.card_id
+            ? PAYMENT_METHODS.find((m) => m.destination === "card")
+            : PAYMENT_METHODS.find((m) => m.destination === "account")
+        const dateStr = pt.transaction_date.includes("T")
+            ? pt.transaction_date
+            : `${pt.transaction_date}T12:00:00Z`
+        setProcessFormData({
+            ...defaultProcessFormState,
+            description: pt.description,
+            amount: String(Math.abs(Number(pt.amount))),
+            transaction_type: pt.transaction_type as "EXPENSE" | "INCOME",
+            transaction_date: dateStr.slice(0, 10),
+            category_id: pt.category_id?.toString() ?? "",
+            account_id: pt.account_id?.toString() ?? "",
+            card_id: pt.card_id?.toString() ?? "",
+            payment_method: method?.id ?? "",
+            condition: "a_vista",
+            installments: "1",
+            is_paid: true,
+            notes: pt.notes ?? "",
+        })
+        setProcessOpen(true)
+    }, [])
+
+    const buildProcessPayload = useCallback(() => {
+        const date = processFormData.transaction_date
+        const installments = Math.max(1, Number(processFormData.installments) || 1)
+        const payload: Record<string, unknown> = {
+            description: processFormData.description,
+            amount: parseFloat(processFormData.amount),
+            transaction_type: processFormData.transaction_type,
+            transaction_date: date.includes("T") ? date : `${date}T12:00:00Z`,
+            category_id: parseInt(processFormData.category_id, 10),
+            installments,
+            is_paid: processFormData.is_paid,
+            notes: processFormData.notes?.trim() || null,
+        }
+        if (processFormData.account_id)
+            payload.account_id = parseInt(processFormData.account_id, 10)
+        if (processFormData.card_id)
+            payload.card_id = parseInt(processFormData.card_id, 10)
+        return payload
+    }, [processFormData])
+
+    const handleProcessSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!preTransactionToProcess) return
+        const payload = buildProcessPayload()
+        if (!payload.category_id || (!payload.account_id && !payload.card_id)) {
+            toast.error("Preencha categoria e conta ou cartão")
+            return
+        }
+        processPreTransactionMutation.mutate({
+            payload,
+            preTransactionId: preTransactionToProcess.id,
+        })
+    }
+
+    const filteredProcessCategories =
+        useMemo(
+            () =>
+                categories?.filter(
+                    (c: { type: string }) => c.type === processFormData.transaction_type
+                ) ?? [],
+            [categories, processFormData.transaction_type]
+        )
+
+    return (
+        <div className="flex flex-col gap-6">
+            <div className="flex items-center justify-between">
+                <h2 className="text-3xl font-bold tracking-tight">
+                    Pré-Lançamentos
+                </h2>
+                <Button onClick={() => setIsOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Novo
+                </Button>
+            </div>
+
+            {isLoading ? (
+                <p className="text-muted-foreground">Carregando...</p>
+            ) : pending.length === 0 ? (
+                <p className="text-muted-foreground">
+                    Nenhum pré-lançamento pendente.
+                </p>
+            ) : (
+                <div className="rounded-md border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Data</TableHead>
+                                <TableHead>Descrição</TableHead>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead className="text-right">Valor</TableHead>
+                                <TableHead className="w-[120px]">Ações</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {pending.map((pt) => (
+                                <TableRow key={pt.id}>
+                                    <TableCell>
+                                        {formatDate(pt.transaction_date)}
+                                    </TableCell>
+                                    <TableCell>{pt.description}</TableCell>
+                                    <TableCell>{pt.transaction_type}</TableCell>
+                                    <TableCell className="text-right">
+                                        {formatCurrency(Number(pt.amount))}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => openProcessDialog(pt)}
+                                                disabled={
+                                                    processPreTransactionMutation.isPending
+                                                }
+                                                title="Processar: abrir formulário de lançamento"
+                                            >
+                                                <CheckCircle className="h-4 w-4" />
+                                                Processar
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => setToDelete(pt)}
+                                            >
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
+
+            {/* Create dialog */}
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Novo pré-lançamento</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div>
+                            <Label>Descrição</Label>
+                            <Input
+                                value={formData.description}
+                                onChange={(e) =>
+                                    setFormData((p) => ({
+                                        ...p,
+                                        description: e.target.value,
+                                    }))
+                                }
+                                placeholder="Ex: Compra mercado"
+                            />
+                        </div>
+                        <div>
+                            <Label>Valor</Label>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                value={formData.amount}
+                                onChange={(e) =>
+                                    setFormData((p) => ({
+                                        ...p,
+                                        amount: e.target.value,
+                                    }))
+                                }
+                            />
+                        </div>
+                        <div>
+                            <Label>Tipo</Label>
+                            <Select
+                                value={formData.transaction_type}
+                                onValueChange={(v) =>
+                                    setFormData((p) => ({
+                                        ...p,
+                                        transaction_type: v,
+                                    }))
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="EXPENSE">Despesa</SelectItem>
+                                    <SelectItem value="INCOME">Receita</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label>Data</Label>
+                            <Input
+                                type="date"
+                                value={formData.transaction_date}
+                                onChange={(e) =>
+                                    setFormData((p) => ({
+                                        ...p,
+                                        transaction_date: e.target.value,
+                                    }))
+                                }
+                            />
+                        </div>
+                        <div>
+                            <Label>Categoria</Label>
+                            <Select
+                                value={formData.category_id}
+                                onValueChange={(v) =>
+                                    setFormData((p) => ({
+                                        ...p,
+                                        category_id: v,
+                                    }))
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Opcional" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {categories.map((c: { id: number; name: string }) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label>Conta</Label>
+                            <Select
+                                value={formData.account_id}
+                                onValueChange={(v) =>
+                                    setFormData((p) => ({ ...p, account_id: v }))
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Opcional" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {accounts.map((a: { id: number; name: string }) => (
+                                        <SelectItem key={a.id} value={String(a.id)}>
+                                            {a.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label>Cartão</Label>
+                            <Select
+                                value={formData.card_id}
+                                onValueChange={(v) =>
+                                    setFormData((p) => ({ ...p, card_id: v }))
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Opcional" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {cards.map((c: { id: number; name: string }) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsOpen(false)}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={handleSubmit}
+                                disabled={createMutation.isPending}
+                            >
+                                Salvar
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Processar: criar lançamento a partir do pré-lançamento e marcar como processado */}
+            <Dialog
+                open={processOpen}
+                onOpenChange={(open) => {
+                    setProcessOpen(open)
+                    if (!open) {
+                        setPreTransactionToProcess(null)
+                        setProcessFormData({ ...defaultProcessFormState })
+                    }
+                }}
+            >
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Processar pré-lançamento</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleProcessSubmit} className="grid gap-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label>Data</Label>
+                                <Input
+                                    type="date"
+                                    value={processFormData.transaction_date}
+                                    onChange={(e) =>
+                                        setProcessFormData({
+                                            ...processFormData,
+                                            transaction_date: e.target.value,
+                                        })
+                                    }
+                                    required
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Valor (R$)</Label>
+                                <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={processFormData.amount}
+                                    onChange={(e) =>
+                                        setProcessFormData({
+                                            ...processFormData,
+                                            amount: e.target.value,
+                                        })
+                                    }
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Descrição</Label>
+                            <Input
+                                value={processFormData.description}
+                                onChange={(e) =>
+                                    setProcessFormData({
+                                        ...processFormData,
+                                        description: e.target.value,
+                                    })
+                                }
+                                required
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Tipo</Label>
+                            <Select
+                                value={processFormData.transaction_type}
+                                onValueChange={(val) =>
+                                    setProcessFormData({
+                                        ...processFormData,
+                                        transaction_type: val as "EXPENSE" | "INCOME",
+                                        category_id: "",
+                                    })
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="EXPENSE">Despesa</SelectItem>
+                                    <SelectItem value="INCOME">Receita</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Categoria</Label>
+                            <Select
+                                value={processFormData.category_id}
+                                onValueChange={(val) =>
+                                    setProcessFormData({
+                                        ...processFormData,
+                                        category_id: val,
+                                    })
+                                }
+                                required
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {filteredProcessCategories.map(
+                                        (c: { id: number; name: string }) => (
+                                            <SelectItem
+                                                key={c.id}
+                                                value={c.id.toString()}
+                                            >
+                                                {c.name}
+                                            </SelectItem>
+                                        )
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label>Forma de pagamento</Label>
+                                <Select
+                                    value={processFormData.payment_method || undefined}
+                                    onValueChange={(val) =>
+                                        applyProcessPaymentMethodDefaults(
+                                            val as PaymentMethodId
+                                        )
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione a forma de pagamento" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {PAYMENT_METHODS.map((pm) => (
+                                            <SelectItem key={pm.id} value={pm.id}>
+                                                {pm.label}
+                                                {pm.isPaidByDefault && " (já pago)"}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {paymentMethod && (
+                                <div className="grid gap-2">
+                                    <Label>
+                                        {destination === "account"
+                                            ? "Conta"
+                                            : "Cartão"}
+                                    </Label>
+                                    {destination === "account" ? (
+                                        <Select
+                                            value={
+                                                processFormData.account_id || undefined
+                                            }
+                                            onValueChange={(val) =>
+                                                setProcessFormData({
+                                                    ...processFormData,
+                                                    account_id: val,
+                                                })
+                                            }
+                                            required
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione a conta" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {accounts?.map(
+                                                    (a: {
+                                                        id: number
+                                                        name: string
+                                                    }) => (
+                                                        <SelectItem
+                                                            key={a.id}
+                                                            value={a.id.toString()}
+                                                        >
+                                                            {a.name}
+                                                        </SelectItem>
+                                                    )
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Select
+                                            value={
+                                                processFormData.card_id || undefined
+                                            }
+                                            onValueChange={(val) =>
+                                                setProcessFormData({
+                                                    ...processFormData,
+                                                    card_id: val,
+                                                })
+                                            }
+                                            required
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione o cartão" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {cards?.map(
+                                                    (c: {
+                                                        id: number
+                                                        name: string
+                                                    }) => (
+                                                        <SelectItem
+                                                            key={c.id}
+                                                            value={c.id.toString()}
+                                                        >
+                                                            {c.name}
+                                                        </SelectItem>
+                                                    )
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <div className="rounded-lg border p-4 space-y-4">
+                            <Label className="text-sm font-medium">Condição</Label>
+                            <div className="flex flex-wrap gap-2">
+                                {CONDITIONS.filter((c) => c.id !== "recorrente").map(
+                                    (c) => (
+                                        <Button
+                                            key={c.id}
+                                            type="button"
+                                            variant={
+                                                processFormData.condition === c.id
+                                                    ? "secondary"
+                                                    : "outline"
+                                            }
+                                            size="sm"
+                                            onClick={() =>
+                                                setProcessFormData({
+                                                    ...processFormData,
+                                                    condition: c.id,
+                                                    installments:
+                                                        c.installmentsDefault.toString(),
+                                                })
+                                            }
+                                        >
+                                            {c.label}
+                                        </Button>
+                                    )
+                                )}
+                            </div>
+                            {conditionConfig.showInstallmentsInput && (
+                                <div className="grid gap-2 max-w-[140px]">
+                                    <Label className="text-xs">
+                                        Número de parcelas
+                                    </Label>
+                                    <Input
+                                        type="number"
+                                        min="2"
+                                        value={processFormData.installments}
+                                        onChange={(e) =>
+                                            setProcessFormData({
+                                                ...processFormData,
+                                                installments: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        {paymentMethod && (
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="process_is_paid"
+                                    checked={processFormData.is_paid}
+                                    onCheckedChange={(checked) =>
+                                        setProcessFormData({
+                                            ...processFormData,
+                                            is_paid: checked === true,
+                                        })
+                                    }
+                                />
+                                <Label
+                                    htmlFor="process_is_paid"
+                                    className="text-sm font-normal cursor-pointer"
+                                >
+                                    Lançamento já pago
+                                </Label>
+                            </div>
+                        )}
+                        <div className="grid gap-2">
+                            <Label>Observação</Label>
+                            <Input
+                                value={processFormData.notes}
+                                onChange={(e) =>
+                                    setProcessFormData({
+                                        ...processFormData,
+                                        notes: e.target.value,
+                                    })
+                                }
+                                placeholder="Opcional"
+                            />
+                        </div>
+                        <Button
+                            type="submit"
+                            disabled={processPreTransactionMutation.isPending}
+                        >
+                            {processPreTransactionMutation.isPending
+                                ? "Salvando..."
+                                : "Criar lançamento e marcar como processado"}
+                        </Button>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete confirm */}
+            <Dialog open={!!toDelete} onOpenChange={() => setToDelete(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Remover pré-lançamento</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-muted-foreground">
+                        Remover &quot;{toDelete?.description}&quot;? Esta ação não
+                        pode ser desfeita.
+                    </p>
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setToDelete(null)}>
+                            Cancelar
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() =>
+                                toDelete && deleteMutation.mutate(toDelete.id)
+                            }
+                            disabled={deleteMutation.isPending}
+                        >
+                            Remover
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
+    )
+}
