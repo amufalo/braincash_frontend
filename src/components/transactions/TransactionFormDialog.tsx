@@ -21,7 +21,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
 import { PAYMENT_METHODS, CONDITIONS, type PaymentMethodId, type ConditionId } from "@/lib/transaction-form"
 
 const defaultFormState = {

@@ -545,8 +545,8 @@ export default function Transactions() {
                                 installment_number: number
                                 group_id?: string
                                 category: { name: string; color?: string }
-                                account: { name: string } | null
-                                card: { name: string } | null
+                                account: { name: string; logo?: string } | null
+                                card: { name: string; logo?: string; brand?: string } | null
                                 amount: number
                                 transaction_type: string
                                 is_paid: boolean

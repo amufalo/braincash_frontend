@@ -157,7 +157,7 @@ export default function PreTransactions() {
                 status: "CONVERTED",
             })
         },
-        onSuccess: (_, { preTransactionId }) => {
+        onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["pre-transactions"] })
             queryClient.invalidateQueries({ queryKey: ["pre-transactions-count"] })
             queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] })

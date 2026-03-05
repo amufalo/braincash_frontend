@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card } from "@/components/ui/card"
-import { Plus, Trash2, Copy } from "lucide-react"
+import { Plus, Copy } from "lucide-react"
 import { toast } from "sonner"
 import { MonthNavigation } from "@/components/budgets/MonthNavigation"
 import { BudgetCard, type BudgetWithSpent } from "@/components/budgets/BudgetCard"
@@ -107,7 +107,7 @@ export default function Budgets() {
   const duplicateMutation = useMutation({
     mutationFn: async (periodToUse: string) =>
       api.post("/budgets/duplicate-previous-month", { period: periodToUse }),
-    onSuccess: (_, periodToUse) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] })
       setCopyConfirmOpen(false)
       toast.success("Orçamentos do último mês copiados!")
@@ -205,7 +205,7 @@ export default function Budgets() {
                 amount_limit: b.amount_limit ?? 0,
                 spent: Number(typeof (b as { spent?: unknown }).spent === "number"
                   ? (b as { spent: number }).spent
-                  : (b as { spent?: string }).spent ?? 0),
+                  : (b as unknown as { spent?: string }).spent ?? 0),
               }}
               periodLabel={periodLabel}
               onEdit={openEdit}
