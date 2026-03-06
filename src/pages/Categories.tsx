@@ -33,11 +33,13 @@ import {
 } from "@/components/ui/select"
 import { Plus, Pencil, Trash2, List, Info } from "lucide-react"
 import { CategoryIcon } from "@/components/categories/CategoryIcon"
+import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 
 interface DescriptionMapping {
     id: number
     description: string
+    transaction_type?: "EXPENSE" | "INCOME"
     created_at: string
 }
 
@@ -46,6 +48,7 @@ export default function Categories() {
     const [editingId, setEditingId] = useState<number | null>(null)
     const [descriptionsOpenForId, setDescriptionsOpenForId] = useState<number | null>(null)
     const [descriptionForCategories, setDescriptionForCategories] = useState<string | null>(null)
+    const [descriptionForCategoriesType, setDescriptionForCategoriesType] = useState<string | null>(null)
 
     const [formData, setFormData] = useState({
         name: "",
@@ -76,20 +79,30 @@ export default function Categories() {
             return res.data
         },
         enabled: !!descriptionsOpenForId,
+        staleTime: 0,
     })
 
     const { data: mappingsByDescription = [] } = useQuery({
-        queryKey: ['mappings-by-description', descriptionForCategories],
+        queryKey: ['mappings-by-description', descriptionForCategories, descriptionForCategoriesType ?? ''],
         queryFn: async () => {
             if (!descriptionForCategories) return []
+            const params: Record<string, string> = { description: descriptionForCategories }
+            if (descriptionForCategoriesType)
+                params.transaction_type = descriptionForCategoriesType
             const res = await api.get<
-                { id: number; category_id: number; category_name: string }[]
-            >(`/categories/by-description/mappings`, {
-                params: { description: descriptionForCategories },
-            })
+                { id: number; category_id: number; category_name: string; transaction_type?: string }[]
+            >(`/categories/by-description/mappings`, { params })
             return res.data
         },
         enabled: !!descriptionForCategories,
+    })
+
+    const { data: descriptionCounts = {} } = useQuery({
+        queryKey: ['category-description-counts'],
+        queryFn: async () => {
+            const res = await api.get<Record<string, number>>('/categories/description-mappings-counts')
+            return res.data
+        },
     })
 
     // Mutations
@@ -140,6 +153,7 @@ export default function Categories() {
             queryClient.invalidateQueries({
                 queryKey: ['category-description-mappings', categoryId],
             })
+            queryClient.invalidateQueries({ queryKey: ['category-description-counts'] })
             toast.success("Descrição removida do mapeamento")
         },
         onError: () => toast.error("Erro ao remover descrição"),
@@ -262,9 +276,18 @@ export default function Categories() {
                                             size="sm"
                                             onClick={() => setDescriptionsOpenForId(cat.id)}
                                             title="Ver descrições relacionadas"
+                                            className="relative"
                                         >
                                             <List className="h-4 w-4 mr-1" />
                                             Descrições
+                                            {(descriptionCounts[cat.id] ?? 0) > 0 && (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="ml-1.5 h-5 min-w-5 px-1.5 text-xs"
+                                                >
+                                                    {descriptionCounts[cat.id]}
+                                                </Badge>
+                                            )}
                                         </Button>
                                     </TableCell>
                                     <TableCell>
@@ -324,6 +347,7 @@ export default function Categories() {
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Descrição</TableHead>
+                                            <TableHead>Tipo</TableHead>
                                             <TableHead className="w-[80px]"></TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -334,11 +358,10 @@ export default function Categories() {
                                                     <div className="flex items-center gap-2">
                                                         {m.description}
                                                         <Popover
-                                                            onOpenChange={(open) =>
-                                                                setDescriptionForCategories(
-                                                                    open ? m.description : null
-                                                                )
-                                                            }
+                                                            onOpenChange={(open) => {
+                                                                setDescriptionForCategories(open ? m.description : null)
+                                                                setDescriptionForCategoriesType(open && m.transaction_type ? m.transaction_type : null)
+                                                            }}
                                                         >
                                                             <PopoverTrigger asChild>
                                                                 <Button
@@ -381,6 +404,15 @@ export default function Categories() {
                                                             </PopoverContent>
                                                         </Popover>
                                                     </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {m.transaction_type ? (
+                                                        <span className={m.transaction_type === "INCOME" ? "text-green-600 text-sm" : "text-red-600 text-sm"}>
+                                                            {m.transaction_type === "INCOME" ? "Receita" : "Despesa"}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-sm">—</span>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>
                                                     <Button

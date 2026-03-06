@@ -233,6 +233,10 @@ export default function PreTransactions() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["pre-transactions"] })
+            queryClient.invalidateQueries({ queryKey: ["category-description-counts"] })
+            queryClient.invalidateQueries({
+                queryKey: ["category-description-mappings", variables.categoryId],
+            })
             setApplyCategoryDialog(null)
             setCategorySelection((prev) => {
                 const next = { ...prev }
@@ -442,8 +446,12 @@ export default function PreTransactions() {
             toast.error("Selecione uma categoria")
             return
         }
+        // Só agrupar por descrição + tipo: mesma descrição com tipo diferente pode ter categoria diferente
         const others = pending.filter(
-            (p) => p.id !== pt.id && p.description === pt.description
+            (p) =>
+                p.id !== pt.id &&
+                p.description === pt.description &&
+                p.transaction_type === pt.transaction_type
         )
         if (others.length > 0) {
             setApplyCategoryDialog({ pt, categoryId, others })
@@ -601,7 +609,11 @@ export default function PreTransactions() {
                                             {formatDate(pt.transaction_date)}
                                         </TableCell>
                                         <TableCell>{pt.description}</TableCell>
-                                        <TableCell>{pt.transaction_type}</TableCell>
+                                        <TableCell>
+                                            <span className={pt.transaction_type === "INCOME" ? "text-green-600" : "text-red-600"}>
+                                                {pt.transaction_type === "INCOME" ? "Receita" : "Despesa"}
+                                            </span>
+                                        </TableCell>
                                         <TableCell className="text-right">
                                             {formatCurrency(Number(pt.amount))}
                                         </TableCell>
@@ -1271,7 +1283,8 @@ export default function PreTransactions() {
                         <>
                             <p className="text-muted-foreground">
                                 Existem {applyCategoryDialog.others.length} outro(s) pré-lançamento(s)
-                                com a descrição &quot;{applyCategoryDialog.pt.description}&quot;.
+                                com a descrição &quot;{applyCategoryDialog.pt.description}&quot; e tipo &quot;
+                                {applyCategoryDialog.pt.transaction_type === "INCOME" ? "Receita" : "Despesa"}&quot;.
                                 Deseja atribuir a categoria a todos?
                             </p>
                             <div className="flex justify-end gap-2">
