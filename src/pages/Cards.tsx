@@ -24,6 +24,7 @@ import { Plus, Pencil, Trash2, CreditCard, DollarSign } from "lucide-react"
 import { toast } from "sonner"
 import { formatCurrency } from "@/lib/utils"
 import { resolveLogoPath, resolveBrandAsset, normalizeLogo } from "@/lib/logo"
+import { getLogosListUrl } from "@/lib/public-path"
 import { LogoPickerTrigger, LogoPickerDialog } from "@/components/logo-picker"
 import { useLogoSelection } from "@/hooks/use-logo-selection"
 
@@ -72,7 +73,7 @@ export default function Cards() {
     const { data: logoOptions = [] } = useQuery({
         queryKey: ['logo-options'],
         queryFn: async () => {
-            const res = await fetch('/logos-list.json')
+            const res = await fetch(getLogosListUrl())
             if (!res.ok) return []
             const json = await res.json()
             return Array.isArray(json) ? json : []

@@ -7,9 +7,16 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "npm run build && npx cap sync android",
+    "cap:android": "npx cap run android",
+    "cap:open": "npx cap open android",
+    "cap:assets": "node -e \"const fs=require('fs'); fs.mkdirSync('assets',{recursive:true}); fs.copyFileSync('public/icone.png','assets/icon-only.png'); fs.copyFileSync('public/logo.png','assets/splash.png')\" && npx capacitor-assets generate --android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/cli": "^8.2.0",
+    "@capacitor/core": "^8.2.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -39,6 +46,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.13",
     "@types/react": "^19.2.7",

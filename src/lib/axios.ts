@@ -3,7 +3,7 @@ import axios from 'axios';
 // API URL: runtime (Docker -e), then Vite .env (VITE_API_URL), then fallback
 declare global {
   interface Window {
-    __RUNTIME_CONFIG__?: { API_URL?: string };
+    __RUNTIME_CONFIG__?: { API_URL?: string; BASE_PATH?: string };
   }
 }
 const getApiBaseUrl = (): string => {

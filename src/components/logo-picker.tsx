@@ -10,9 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { deriveNameFromLogo } from "@/lib/logo";
+import { getLogosBasePath } from "@/lib/public-path";
 import { cn } from "@/lib/utils";
-
-const DEFAULT_BASE_PATH = "/logos";
 
 const resolveLogoSrc = (logo: string, basePath: string) => {
     if (/^https?:\/\//.test(logo)) {
@@ -36,7 +35,7 @@ export function LogoPickerTrigger({
     disabled,
     helperText = "Clique para trocar o logo",
     placeholder = "Selecionar logo",
-    basePath = DEFAULT_BASE_PATH,
+    basePath = getLogosBasePath(),
     onOpen,
     className,
 }: LogoPickerTriggerProps) {
@@ -97,7 +96,7 @@ export function LogoPickerDialog({
     value,
     onOpenChange,
     onSelect,
-    basePath = DEFAULT_BASE_PATH,
+    basePath = getLogosBasePath(),
     title = "Escolher logo",
     description = "Selecione o logo que será usado para identificar este item.",
     emptyState,

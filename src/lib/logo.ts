@@ -1,3 +1,5 @@
+import { getPublicPath } from './public-path';
+
 /**
  * Resolve logo path for account/card institution.
  * Logo can be: full URL (http/https/data), path starting with /, or filename (served from /logos/).
@@ -11,7 +13,10 @@ export function resolveLogoPath(logo: string | null | undefined): string | null 
   ) {
     return logo;
   }
-  return logo.startsWith("/") ? logo : `/logos/${logo}`;
+  const base = getPublicPath();
+  const filename = normalizeLogo(logo) || logo.split('/').filter(Boolean).pop() || logo;
+  const path = `${base}/logos/${filename}`.replace(/\/+/g, '/');
+  return path;
 }
 
 /**
@@ -38,6 +43,20 @@ export function deriveNameFromLogo(logo?: string | null): string {
 }
 
 /** Bandeira (card brand) asset paths - SVGs in public/bandeiras */
+export function getBrandAssetPaths(): Record<string, string> {
+  const base = getPublicPath();
+  return {
+    visa: `${base}/bandeiras/visa.svg`,
+    mastercard: `${base}/bandeiras/mastercard.svg`,
+    amex: `${base}/bandeiras/amex.svg`,
+    american: `${base}/bandeiras/amex.svg`,
+    elo: `${base}/bandeiras/elo.svg`,
+    hipercard: `${base}/bandeiras/hipercard.svg`,
+    hiper: `${base}/bandeiras/hipercard.svg`,
+  };
+}
+
+/** @deprecated Use getBrandAssetPaths() for base-path aware paths */
 export const BRAND_ASSETS: Record<string, string> = {
   visa: "/bandeiras/visa.svg",
   mastercard: "/bandeiras/mastercard.svg",
@@ -54,8 +73,9 @@ export const BRAND_ASSETS: Record<string, string> = {
 export function resolveBrandAsset(brand: string | null | undefined): string | null {
   if (!brand) return null;
   const normalized = brand.trim().toLowerCase();
-  const match = (
-    Object.keys(BRAND_ASSETS) as Array<keyof typeof BRAND_ASSETS>
-  ).find((entry) => normalized.includes(entry));
-  return match ? BRAND_ASSETS[match] : null;
+  const assets = getBrandAssetPaths();
+  const match = (Object.keys(assets) as Array<keyof typeof assets>).find((entry) =>
+    normalized.includes(entry)
+  );
+  return match ? assets[match].replace(/\/+/g, '/') : null;
 }
