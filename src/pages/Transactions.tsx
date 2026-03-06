@@ -275,18 +275,19 @@ export default function Transactions() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <h2 className="text-3xl font-bold tracking-tight">Lançamentos</h2>
-                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            <div className="flex flex-col gap-4">
+                <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Lançamentos</h2>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex flex-wrap gap-2">
                     <Input
                         type="date"
-                        className="w-auto"
+                        className="w-full sm:w-auto min-w-0"
                         value={filters.start_date}
                         onChange={(e) => setFilters({ ...filters, start_date: e.target.value })}
                     />
                     <Input
                         type="date"
-                        className="w-auto"
+                        className="w-full sm:w-auto min-w-0"
                         value={filters.end_date}
                         onChange={(e) => setFilters({ ...filters, end_date: e.target.value })}
                     />
@@ -298,14 +299,15 @@ export default function Transactions() {
                     >
                         <Search className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" className="text-destructive border-destructive/50" onClick={() => openNew("EXPENSE")}>
-                        <ArrowDownLeft className="mr-2 h-4 w-4" />
+                    <Button variant="outline" className="text-destructive border-destructive/50 flex-1 sm:flex-none" onClick={() => openNew("EXPENSE")}>
+                        <ArrowDownLeft className="mr-2 h-4 w-4 shrink-0" />
                         Nova despesa
                     </Button>
-                    <Button variant="outline" className="text-green-600 border-green-600/50" onClick={() => openNew("INCOME")}>
-                        <ArrowUpRight className="mr-2 h-4 w-4" />
+                    <Button variant="outline" className="text-green-600 border-green-600/50 flex-1 sm:flex-none" onClick={() => openNew("INCOME")}>
+                        <ArrowUpRight className="mr-2 h-4 w-4 shrink-0" />
                         Nova receita
                     </Button>
+                    </div>
                 </div>
             </div>
 
@@ -514,8 +516,8 @@ export default function Transactions() {
                 </DialogContent>
             </Dialog>
 
-            <div className="rounded-md border bg-card">
-                <Table>
+            <div className="rounded-md border bg-card overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+                <Table className="min-w-[640px]">
                     <TableHeader>
                         <TableRow>
                             <TableHead>Data</TableHead>

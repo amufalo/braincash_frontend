@@ -239,8 +239,8 @@ export default function Categories() {
                 </Dialog>
             </div>
 
-            <div className="rounded-md border bg-card">
-                <Table>
+            <div className="rounded-md border bg-card overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+                <Table className="min-w-[500px]">
                     <TableHeader>
                         <TableRow>
                             <TableHead>Cor</TableHead>

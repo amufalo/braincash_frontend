@@ -130,8 +130,8 @@ export default function Insights() {
   const isSaving = saveMutation.isPending || deleteMutation.isPending;
 
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="text-3xl font-bold tracking-tight">Insights</h2>
+    <div className="flex flex-col gap-4 md:gap-6">
+      <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Insights</h2>
 
       <MonthNavigation basePath="/insights" />
 

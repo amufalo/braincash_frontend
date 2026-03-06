@@ -10,13 +10,13 @@ export function MobileNav() {
     return (
         <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden">
-                    <Menu />
-                    <span className="sr-only">Toggle Menu</span>
+                <Button variant="ghost" size="icon" className="md:hidden -ml-1">
+                    <Menu className="h-5 w-5" />
+                    <span className="sr-only">Abrir menu</span>
                 </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="p-0 bg-background text-foreground w-72">
-                <AppSidebar onNavigate={() => setOpen(false)} />
+            <SheetContent side="left" className="p-0 bg-sidebar text-sidebar-foreground w-[min(20rem,85vw)] max-w-[20rem]">
+                <AppSidebar onNavigate={() => setOpen(false)} className="w-full h-full" />
             </SheetContent>
         </Sheet>
     );

@@ -10,6 +10,7 @@ import { useState } from 'react';
 interface AppSidebarProps {
   onNavigate?: () => void;
   preLancamentosCount?: number;
+  className?: string;
 }
 
 function isActive(pathname: string, url: string) {
@@ -18,7 +19,7 @@ function isActive(pathname: string, url: string) {
   return n === u || n.startsWith(`${u}/`);
 }
 
-export function AppSidebar({ onNavigate, preLancamentosCount = 0 }: AppSidebarProps) {
+export function AppSidebar({ onNavigate, preLancamentosCount = 0, className }: AppSidebarProps) {
   const { logout, user } = useAuth();
   const location = useLocation();
   const pathname = location.pathname;
@@ -31,7 +32,7 @@ export function AppSidebar({ onNavigate, preLancamentosCount = 0 }: AppSidebarPr
   };
 
   return (
-    <div className="flex h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+    <div className={cn("flex h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground", className)}>
       <div className="flex h-16 items-center border-b border-sidebar-border px-6">
         <span className="text-xl font-bold text-sidebar-primary">Brain Cash</span>
       </div>

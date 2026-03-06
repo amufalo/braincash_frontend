@@ -30,9 +30,9 @@ export function DashboardWelcome({ name }: DashboardWelcomeProps) {
   const dateStr = capitalizeFirst(formatCurrentDate());
 
   return (
-    <Card className="relative overflow-hidden border-none bg-gradient-to-br from-primary/10 to-primary/5 px-6 py-8 shadow-sm">
+    <Card className="relative overflow-hidden border-none bg-gradient-to-br from-primary/10 to-primary/5 px-4 sm:px-6 py-6 sm:py-8 shadow-sm">
       <div className="relative">
-        <h1 className="text-xl font-medium tracking-tight">
+        <h1 className="text-lg sm:text-xl font-medium tracking-tight">
           {greeting}, {displayName}! 👋
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">{dateStr}</p>

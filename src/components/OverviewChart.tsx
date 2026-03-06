@@ -6,7 +6,8 @@ interface OverviewChartProps {
 
 export function OverviewChart({ data }: OverviewChartProps) {
     return (
-        <ResponsiveContainer width="100%" height={350}>
+        <div className="w-full h-[240px] sm:h-[300px] md:h-[350px]">
+        <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data}>
                 <XAxis
                     dataKey="month"
@@ -30,5 +31,6 @@ export function OverviewChart({ data }: OverviewChartProps) {
                 <Bar dataKey="expense" fill="#FF5A5F" radius={[4, 4, 0, 0]} name="Despesas" />
             </BarChart>
         </ResponsiveContainer>
+        </div>
     )
 }

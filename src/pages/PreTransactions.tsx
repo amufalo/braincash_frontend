@@ -27,11 +27,13 @@ import {
 } from "@/components/ui/table"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, CheckCircle, Trash2, FileUp, Save } from "lucide-react"
+import { Plus, CheckCircle, Trash2, FileUp, Save, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { PAYMENT_METHODS, CONDITIONS, type PaymentMethodId, type ConditionId } from "@/lib/transaction-form"
 import { CategoryIcon } from "@/components/categories/CategoryIcon"
+import { ModelSelector } from "@/components/insights/ModelSelector"
+import { DEFAULT_MODEL } from "@/lib/insights"
 
 interface PreTransaction {
     id: number
@@ -63,6 +65,44 @@ const defaultProcessFormState = {
     notes: "",
 }
 
+const defaultBatchFormState = {
+    payment_method: "" as PaymentMethodId | "",
+    account_id: "",
+    card_id: "",
+    condition: "a_vista" as ConditionId,
+    installments: "1",
+    is_paid: true,
+}
+
+function buildPayloadForPreTransaction(
+    pt: PreTransaction,
+    shared: {
+        account_id: string
+        card_id: string
+        condition: ConditionId
+        installments: string
+        is_paid: boolean
+    }
+): Record<string, unknown> {
+    const dateStr = pt.transaction_date.includes("T")
+        ? pt.transaction_date
+        : `${pt.transaction_date}T12:00:00Z`
+    const installments = Math.max(1, Number(shared.installments) || 1)
+    const payload: Record<string, unknown> = {
+        description: pt.description,
+        amount: Math.abs(Number(pt.amount)),
+        transaction_type: pt.transaction_type,
+        transaction_date: dateStr,
+        category_id: pt.category_id!,
+        installments,
+        is_paid: shared.is_paid,
+        notes: pt.notes?.trim() || null,
+    }
+    if (shared.account_id) payload.account_id = parseInt(shared.account_id, 10)
+    if (shared.card_id) payload.card_id = parseInt(shared.card_id, 10)
+    return payload
+}
+
 export default function PreTransactions() {
     const [isOpen, setIsOpen] = useState(false)
     const [toDelete, setToDelete] = useState<PreTransaction | null>(null)
@@ -77,10 +117,14 @@ export default function PreTransactions() {
     const [importDialogOpen, setImportDialogOpen] = useState(false)
     const [importAccountId, setImportAccountId] = useState("")
     const [importCardId, setImportCardId] = useState("")
+    const [importModelId, setImportModelId] = useState(DEFAULT_MODEL)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [processOpen, setProcessOpen] = useState(false)
     const [preTransactionToProcess, setPreTransactionToProcess] = useState<PreTransaction | null>(null)
     const [processFormData, setProcessFormData] = useState(defaultProcessFormState)
+    const [batchProcessOpen, setBatchProcessOpen] = useState(false)
+    const [batchFormData, setBatchFormData] = useState(defaultBatchFormState)
+    const [batchProcessingIndex, setBatchProcessingIndex] = useState<number | null>(null)
     const [formData, setFormData] = useState({
         description: "",
         amount: "0",
@@ -188,6 +232,59 @@ export default function PreTransactions() {
         },
     })
 
+    /** Process multiple pre-transactions with shared payment options (sequential). */
+    const processBatchMutation = useMutation({
+        mutationFn: async ({
+            items,
+            shared,
+            onProgress,
+        }: {
+            items: PreTransaction[]
+            shared: typeof defaultBatchFormState
+            onProgress?: (index: number) => void
+        }) => {
+            for (let i = 0; i < items.length; i++) {
+                onProgress?.(i)
+                const pt = items[i]
+                if (!pt.category_id) {
+                    throw new Error(`Pré-lançamento "${pt.description}" não tem categoria.`)
+                }
+                const payload = buildPayloadForPreTransaction(pt, {
+                    account_id: shared.account_id,
+                    card_id: shared.card_id,
+                    condition: shared.condition,
+                    installments: shared.installments,
+                    is_paid: shared.is_paid,
+                })
+                await api.post("/transactions/", payload)
+                await api.put(`/pre-transactions/${pt.id}`, {
+                    status: "CONVERTED",
+                })
+            }
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions"] })
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions-count"] })
+            queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] })
+            queryClient.invalidateQueries({ queryKey: ["transactions"] })
+            queryClient.invalidateQueries({ queryKey: ["accounts"] })
+            queryClient.invalidateQueries({ queryKey: ["cards"] })
+            setBatchProcessOpen(false)
+            setBatchFormData({ ...defaultBatchFormState })
+            setBatchProcessingIndex(null)
+            const count = variables.items.length
+            toast.success(
+                count === 1
+                    ? "1 pré-lançamento processado!"
+                    : `${count} pré-lançamentos processados!`
+            )
+        },
+        onError: (err: { response?: { data?: { detail?: string } } }) => {
+            setBatchProcessingIndex(null)
+            toast.error(err.response?.data?.detail ?? (err as Error).message ?? "Erro ao processar em lote")
+        },
+    })
+
     const deleteMutation = useMutation({
         mutationFn: async (id: number) => api.delete(`/pre-transactions/${id}`),
         onSuccess: () => {
@@ -259,15 +356,18 @@ export default function PreTransactions() {
             file,
             accountId,
             cardId,
+            modelId,
         }: {
             file: File
             accountId?: string
             cardId?: string
+            modelId?: string
         }) => {
             const formData = new FormData()
             formData.append("file", file)
             if (accountId) formData.append("account_id", accountId)
             if (cardId) formData.append("card_id", cardId)
+            if (modelId) formData.append("model_id", modelId)
             const res = await api.post<{
                 created: number
                 duplicates_skipped: number
@@ -330,6 +430,7 @@ export default function PreTransactions() {
             file,
             accountId: importAccountId || undefined,
             cardId: importCardId || undefined,
+            modelId: importModelId || undefined,
         })
     }
 
@@ -351,6 +452,12 @@ export default function PreTransactions() {
     const destination = paymentMethod?.destination ?? "account"
     const conditionConfig = CONDITIONS.find((c) => c.id === processFormData.condition) ?? CONDITIONS[0]
 
+    const batchPaymentMethod = batchFormData.payment_method
+        ? PAYMENT_METHODS.find((p) => p.id === batchFormData.payment_method)
+        : null
+    const batchDestination = batchPaymentMethod?.destination ?? "account"
+    const batchConditionConfig = CONDITIONS.find((c) => c.id === batchFormData.condition) ?? CONDITIONS[0]
+
     const applyProcessPaymentMethodDefaults = useCallback((methodId: PaymentMethodId) => {
         const method = PAYMENT_METHODS.find((m) => m.id === methodId)
         if (!method) return
@@ -362,6 +469,52 @@ export default function PreTransactions() {
             is_paid: method.isPaidByDefault,
         }))
     }, [])
+
+    const applyBatchPaymentMethodDefaults = useCallback((methodId: PaymentMethodId) => {
+        const method = PAYMENT_METHODS.find((m) => m.id === methodId)
+        if (!method) return
+        setBatchFormData((prev) => ({
+            ...prev,
+            payment_method: methodId,
+            account_id: method.destination === "account" ? prev.account_id : "",
+            card_id: method.destination === "card" ? prev.card_id : "",
+            is_paid: method.isPaidByDefault,
+        }))
+    }, [])
+
+    const openBatchProcessDialog = useCallback(() => {
+        const items = filteredPending
+        let initial = { ...defaultBatchFormState }
+        if (items.length > 0) {
+            const firstCard = items[0].card_id
+            const firstAccount = items[0].account_id
+            const allSameCard =
+                firstCard != null && items.every((pt) => pt.card_id === firstCard)
+            const allSameAccount =
+                firstAccount != null && items.every((pt) => pt.account_id === firstAccount)
+            if (allSameCard) {
+                const method = PAYMENT_METHODS.find((m) => m.destination === "card")
+                initial = {
+                    ...defaultBatchFormState,
+                    card_id: String(firstCard),
+                    payment_method: (method?.id ?? "") as PaymentMethodId | "",
+                    account_id: "",
+                    is_paid: method?.isPaidByDefault ?? true,
+                }
+            } else if (allSameAccount) {
+                const method = PAYMENT_METHODS.find((m) => m.destination === "account")
+                initial = {
+                    ...defaultBatchFormState,
+                    account_id: String(firstAccount),
+                    payment_method: (method?.id ?? "") as PaymentMethodId | "",
+                    card_id: "",
+                    is_paid: method?.isPaidByDefault ?? true,
+                }
+            }
+        }
+        setBatchFormData(initial)
+        setBatchProcessOpen(true)
+    }, [filteredPending])
 
     const openProcessDialog = useCallback((pt: PreTransaction) => {
         setPreTransactionToProcess(pt)
@@ -420,6 +573,25 @@ export default function PreTransactions() {
         processPreTransactionMutation.mutate({
             payload,
             preTransactionId: preTransactionToProcess.id,
+        })
+    }
+
+    const handleBatchProcessSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        const needAccount = batchDestination === "account"
+        const needCard = batchDestination === "card"
+        if (needAccount && !batchFormData.account_id) {
+            toast.error("Selecione a conta")
+            return
+        }
+        if (needCard && !batchFormData.card_id) {
+            toast.error("Selecione o cartão")
+            return
+        }
+        processBatchMutation.mutate({
+            items: filteredPending,
+            shared: batchFormData,
+            onProgress: setBatchProcessingIndex,
         })
     }
 
@@ -494,11 +666,11 @@ export default function PreTransactions() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold tracking-tight">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
                     Pré-Lançamentos
                 </h2>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -518,6 +690,24 @@ export default function PreTransactions() {
                         <Plus className="mr-2 h-4 w-4" />
                         Novo
                     </Button>
+                    {filteredPending.length > 0 && (
+                        <Button
+                            variant="outline"
+                            onClick={openBatchProcessDialog}
+                            disabled={
+                                processBatchMutation.isPending ||
+                                filteredPending.some((pt) => !pt.category_id)
+                            }
+                            title={
+                                filteredPending.some((pt) => !pt.category_id)
+                                    ? "Atribua categoria a todos os itens ou use o filtro 'Com categoria'."
+                                    : undefined
+                            }
+                        >
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                            Processar filtrados
+                        </Button>
+                    )}
                     {pending.length > 0 && (
                         <Button
                             variant="outline"
@@ -588,8 +778,8 @@ export default function PreTransactions() {
                           : "Nenhum pré-lançamento pendente."}
                 </p>
             ) : (
-                <div className="rounded-md border">
-                    <Table>
+                <div className="rounded-md border overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+                    <Table className="min-w-[640px]">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Data</TableHead>
@@ -846,7 +1036,7 @@ export default function PreTransactions() {
                 </DialogContent>
             </Dialog>
 
-            {/* Importar fatura: selecionar conta/cartão antes de escolher o PDF */}
+            {/* Importar fatura: selecionar conta/cartão e modelo de IA antes de escolher o PDF */}
             <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -855,7 +1045,21 @@ export default function PreTransactions() {
                     <p className="text-muted-foreground">
                         Para qual conta ou cartão enviar os lançamentos importados?
                     </p>
+                    <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 p-3 flex gap-3">
+                        <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                        <p className="text-sm text-card-foreground">
+                            <strong>Aviso:</strong> O PDF será enviado ao provedor de IA escolhido para extração dos lançamentos. Certifique-se de que você confia no provedor antes de prosseguir.
+                        </p>
+                    </div>
                     <div className="grid gap-4 py-4">
+                        <ModelSelector
+                            value={importModelId}
+                            onValueChange={setImportModelId}
+                            disabled={importInvoiceMutation.isPending}
+                            title="Modelo de IA para extração"
+                            description="Escolha o provedor de IA (OpenAI ou Anthropic Claude) e o modelo que será utilizado para extrair os lançamentos do PDF da fatura."
+                            compact
+                        />
                         <div>
                             <Label>Conta</Label>
                             <Select
@@ -1214,6 +1418,188 @@ export default function PreTransactions() {
                                 ? "Salvando..."
                                 : "Criar lançamento e marcar como processado"}
                         </Button>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Processar filtrados em lote */}
+            <Dialog
+                open={batchProcessOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setBatchProcessOpen(false)
+                        setBatchFormData({ ...defaultBatchFormState })
+                        setBatchProcessingIndex(null)
+                    }
+                }}
+            >
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>
+                            Processar {filteredPending.length} pré-lançamento(s)
+                        </DialogTitle>
+                    </DialogHeader>
+                    <p className="text-muted-foreground text-sm">
+                        Será usada a mesma forma de pagamento e conta/cartão para todos.
+                        Descrição, valor, data e categoria vêm de cada pré-lançamento.
+                    </p>
+                    <form onSubmit={handleBatchProcessSubmit} className="grid gap-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label>Forma de pagamento</Label>
+                                <Select
+                                    value={batchFormData.payment_method || undefined}
+                                    onValueChange={(val) =>
+                                        applyBatchPaymentMethodDefaults(val as PaymentMethodId)
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione a forma de pagamento" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {PAYMENT_METHODS.map((pm) => (
+                                            <SelectItem key={pm.id} value={pm.id}>
+                                                {pm.label}
+                                                {pm.isPaidByDefault && " (já pago)"}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {batchPaymentMethod && (
+                                <div className="grid gap-2">
+                                    <Label>
+                                        {batchDestination === "account" ? "Conta" : "Cartão"}
+                                    </Label>
+                                    {batchDestination === "account" ? (
+                                        <Select
+                                            value={batchFormData.account_id || undefined}
+                                            onValueChange={(val) =>
+                                                setBatchFormData((prev) => ({ ...prev, account_id: val }))
+                                            }
+                                            required
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione a conta" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {accounts?.map((a: { id: number; name: string }) => (
+                                                    <SelectItem key={a.id} value={a.id.toString()}>
+                                                        {a.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Select
+                                            value={batchFormData.card_id || undefined}
+                                            onValueChange={(val) =>
+                                                setBatchFormData((prev) => ({ ...prev, card_id: val }))
+                                            }
+                                            required
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione o cartão" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {cards?.map((c: { id: number; name: string }) => (
+                                                    <SelectItem key={c.id} value={c.id.toString()}>
+                                                        {c.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <div className="rounded-lg border p-4 space-y-4">
+                            <Label className="text-sm font-medium">Condição</Label>
+                            <div className="flex flex-wrap gap-2">
+                                {CONDITIONS.filter((c) => c.id !== "recorrente").map((c) => (
+                                    <Button
+                                        key={c.id}
+                                        type="button"
+                                        variant={
+                                            batchFormData.condition === c.id ? "secondary" : "outline"
+                                        }
+                                        size="sm"
+                                        onClick={() =>
+                                            setBatchFormData((prev) => ({
+                                                ...prev,
+                                                condition: c.id,
+                                                installments: c.installmentsDefault.toString(),
+                                            }))
+                                        }
+                                    >
+                                        {c.label}
+                                    </Button>
+                                ))}
+                            </div>
+                            {batchConditionConfig.showInstallmentsInput && (
+                                <div className="grid gap-2 max-w-[140px]">
+                                    <Label className="text-xs">Número de parcelas</Label>
+                                    <Input
+                                        type="number"
+                                        min="2"
+                                        value={batchFormData.installments}
+                                        onChange={(e) =>
+                                            setBatchFormData((prev) => ({
+                                                ...prev,
+                                                installments: e.target.value,
+                                            }))
+                                        }
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        {batchPaymentMethod && (
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="batch_is_paid"
+                                    checked={batchFormData.is_paid}
+                                    onCheckedChange={(checked) =>
+                                        setBatchFormData((prev) => ({
+                                            ...prev,
+                                            is_paid: checked === true,
+                                        }))
+                                    }
+                                />
+                                <Label
+                                    htmlFor="batch_is_paid"
+                                    className="text-sm font-normal cursor-pointer"
+                                >
+                                    Lançamento já pago
+                                </Label>
+                            </div>
+                        )}
+                        <div className="flex items-center justify-between gap-2 pt-2">
+                            {batchProcessingIndex !== null ? (
+                                <span className="text-sm text-muted-foreground">
+                                    Processando {batchProcessingIndex + 1} de {filteredPending.length}...
+                                </span>
+                            ) : (
+                                <span />
+                            )}
+                            <div className="flex gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setBatchProcessOpen(false)}
+                                    disabled={processBatchMutation.isPending}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={processBatchMutation.isPending || !batchFormData.payment_method}
+                                >
+                                    {processBatchMutation.isPending
+                                        ? "Processando..."
+                                        : `Processar ${filteredPending.length} itens`}
+                                </Button>
+                            </div>
+                        </div>
                     </form>
                 </DialogContent>
             </Dialog>

@@ -48,8 +48,8 @@ export function MonthNavigation({ basePath }: MonthNavigationProps) {
   const displayLabel = label.charAt(0).toUpperCase() + label.slice(1);
 
   return (
-    <Card className="flex items-center justify-between gap-4 px-4 py-3">
-      <div className="flex items-center gap-2">
+    <Card className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 px-4 py-3">
+      <div className="flex items-center gap-2 order-2 sm:order-1">
         <Button variant="outline" size="icon" asChild>
           <Link to={{ pathname, search: prevSearch }} aria-label="Mês anterior">
             <ChevronLeft className="h-4 w-4" />
@@ -69,7 +69,7 @@ export function MonthNavigation({ basePath }: MonthNavigationProps) {
           </Button>
         )}
       </div>
-      <span className="text-sm font-medium text-muted-foreground">{displayLabel}</span>
+      <span className="text-sm font-medium text-muted-foreground order-1 sm:order-2 text-center sm:text-left">{displayLabel}</span>
     </Card>
   );
 }

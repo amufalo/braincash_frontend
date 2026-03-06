@@ -28,11 +28,11 @@ export default function Dashboard() {
     }
 
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 md:gap-6">
             <DashboardWelcome name={user?.name} />
             <MonthNavigation />
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatsCard
                     title="Saldo em Contas"
                     value={formatCurrency(stats?.totalBalance || 0)}
@@ -64,8 +64,8 @@ export default function Dashboard() {
                 />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <div className="col-span-4 rounded-xl border bg-card text-card-foreground shadow">
+            <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
+                <div className="lg:col-span-4 rounded-xl border bg-card text-card-foreground shadow overflow-hidden">
                     <div className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
                         <h3 className="font-semibold leading-none tracking-tight">Visão Geral</h3>
                     </div>
@@ -73,7 +73,7 @@ export default function Dashboard() {
                         <OverviewChart data={stats?.chartData || []} />
                     </div>
                 </div>
-                <div className="col-span-3 rounded-xl border bg-card text-card-foreground shadow">
+                <div className="lg:col-span-3 rounded-xl border bg-card text-card-foreground shadow">
                     <div className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
                         <h3 className="font-semibold leading-none tracking-tight">Transações Recentes</h3>
                     </div>
