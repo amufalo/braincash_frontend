@@ -44,7 +44,6 @@ A aplicação consome uma API REST (configurada via `axios`) e utiliza **React R
 - **Análise e relatórios**
   - **Insights** (`/insights`).
   - **Tendências** (`/reports/trends`).
-  - **Uso de Cartões** (`/reports/cards`).
   - **Top Estabelecimentos** (`/top-establishments`).
 
 - **Configurações**
@@ -191,7 +190,7 @@ Alguns diretórios importantes em `src/`:
   - `Dashboard.tsx`, `Accounts.tsx`, `Cards.tsx`, `Categories.tsx`,  
     `Transactions.tsx`, `PreTransactions.tsx`, `Calendar.tsx`, `Budgets.tsx`,  
     `Users.tsx`, `Notes.tsx`, `Insights.tsx`, `Settings.tsx`,  
-    `reports/Trends.tsx`, `reports/CardsReport.tsx`, `TopEstablishments.tsx`,  
+    `reports/Trends.tsx`, `TopEstablishments.tsx`,  
     `Login.tsx`, `admin/Tenants.tsx`, `admin/TenantUsers.tsx`.
 - `src/components/` — componentes reutilizáveis:
   - `layout/` (inclui `Layout`, `AppSidebar`, navegação, etc.).

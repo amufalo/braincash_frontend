@@ -19,7 +19,6 @@ import Notes from './pages/Notes';
 import Insights from './pages/Insights';
 import Settings from './pages/Settings';
 import ReportsTrends from './pages/reports/Trends';
-import ReportsCards from './pages/reports/CardsReport';
 import TopEstablishments from './pages/TopEstablishments';
 import Layout from './components/layout/Layout';
 import PrivateRoute from './components/PrivateRoute';
@@ -50,7 +49,6 @@ function App() {
                 <Route path="/notes" element={<Notes />} />
                 <Route path="/insights" element={<Insights />} />
                 <Route path="/reports/trends" element={<ReportsTrends />} />
-                <Route path="/reports/cards" element={<ReportsCards />} />
                 <Route path="/top-establishments" element={<TopEstablishments />} />
                 <Route path="/settings" element={<Settings />} />
 

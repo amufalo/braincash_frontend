@@ -31,6 +31,7 @@ import { toast } from "sonner"
 import { formatCurrency, formatDate, cn } from "@/lib/utils"
 import { PAYMENT_METHODS, CONDITIONS, type PaymentMethodId, type ConditionId } from "@/lib/transaction-form"
 import { resolveLogoPath, resolveBrandAsset } from "@/lib/logo"
+import { CategoryIcon } from "@/components/categories/CategoryIcon"
 
 const defaultFormState = {
     description: "",
@@ -544,7 +545,7 @@ export default function Transactions() {
                                 installments: number
                                 installment_number: number
                                 group_id?: string
-                                category: { name: string; color?: string }
+                                category: { name: string; color?: string; icon?: string }
                                 account: { name: string; logo?: string } | null
                                 card: { name: string; logo?: string; brand?: string } | null
                                 amount: number
@@ -568,12 +569,13 @@ export default function Transactions() {
                                     </TableCell>
                                     <TableCell>
                                         <span
-                                            className="inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold"
+                                            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-0.5 text-xs font-semibold"
                                             style={{
                                                 borderColor: t.category?.color ?? "#ccc",
                                                 color: t.category?.color ?? "#ccc",
                                             }}
                                         >
+                                            <CategoryIcon icon={t.category?.icon} color={t.category?.color} className="h-3 w-3 shrink-0" />
                                             {t.category?.name ?? "Sem Categoria"}
                                         </span>
                                     </TableCell>

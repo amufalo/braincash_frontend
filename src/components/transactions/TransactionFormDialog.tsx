@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { PAYMENT_METHODS, CONDITIONS, type PaymentMethodId, type ConditionId } from "@/lib/transaction-form"
+import { CategoryIcon } from "@/components/categories/CategoryIcon"
 
 const defaultFormState = {
   description: "",
@@ -240,8 +241,13 @@ export function TransactionFormDialog({
             >
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {filteredCategories.map((c: { id: number; name: string }) => (
-                  <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                {filteredCategories.map((c: { id: number; name: string; icon?: string; color?: string }) => (
+                  <SelectItem key={c.id} value={c.id.toString()}>
+                    <span className="flex items-center gap-2">
+                      <CategoryIcon icon={c.icon} color={c.color} className="h-4 w-4 shrink-0" />
+                      {c.name}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

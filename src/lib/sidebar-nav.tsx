@@ -90,7 +90,6 @@ export function createSidebarNavData(options: SidebarNavOptions = {}): SidebarNa
         items: [
           { title: "Insights", url: "/insights", icon: Sparkles },
           { title: "Tendências", url: "/reports/trends", icon: TrendingUp },
-          { title: "Uso de Cartões", url: "/reports/cards", icon: CreditCard },
           { title: "Top Estabelecimentos", url: "/top-establishments", icon: Store },
         ],
       },

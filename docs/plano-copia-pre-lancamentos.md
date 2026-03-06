@@ -1,6 +1,6 @@
-# Plano de cópia: Ações de Pré-Lançamentos (OpenMonetis → BrainCash)
+# Plano: Ações de Pré-Lançamentos (BrainCash)
 
-## 1. Ações disponíveis no OpenMonetis para Pré-Lançamentos
+## 1. Ações desejadas para Pré-Lançamentos
 
 ### 1.1 Server Actions (app/(dashboard)/pre-lancamentos/actions.ts)
 
@@ -53,9 +53,9 @@
 
 ---
 
-## 3. Lacunas BrainCash vs OpenMonetis
+## 3. Lacunas a implementar
 
-| Funcionalidade OpenMonetis | No BrainCash |
+| Funcionalidade | No BrainCash |
 |---------------------------|--------------|
 | Marcar como processado (após converter) | Já existe: converter marca como CONVERTED. |
 | Descartar (sem apagar, status discarded) | Não existe: só existe DELETE (remove do BD). |
@@ -73,7 +73,7 @@
 
 1. **Status “discarded”**
    - Adicionar status `DISCARDED` ao enum `PreTransactionStatus` no backend.
-   - Migration: adicionar coluna `discarded_at` (opcional, para consistência com OpenMonetis) ou apenas usar `status`.
+   - Migration: adicionar coluna `discarded_at` (opcional) ou apenas usar `status`.
    - Regras: apenas PENDING pode ser descartado; descartar = atualizar status para DISCARDED (e `discarded_at` se existir). Não apagar registro.
 
 2. **Endpoint descartar (single)**
@@ -90,7 +90,7 @@
 ### Fase 2: Frontend – ações e abas
 
 5. **Abas Pendentes / Processados / Descartados**
-   - Na página Pré-Lançamentos, usar abas (Tabs) como no OpenMonetis.
+   - Na página Pré-Lançamentos, usar abas (Tabs).
    - Buscar lista com `status` conforme aba ativa (ou buscar todos e filtrar no cliente).
    - Pendentes: ações ativas; Processados e Descartados: somente leitura (badge de status + data).
 
@@ -112,7 +112,7 @@
 ### Fase 3: Alinhamento ao fluxo “Processar” (opcional)
 
 9. **Processar = abrir formulário de lançamento**
-   - Como no OpenMonetis: ao clicar “Processar”, abrir o mesmo formulário usado para criar transação (LancamentoDialog / TransactionForm), com campos pré-preenchidos a partir do pré-lançamento.
+   - Ao clicar “Processar”, abrir o mesmo formulário usado para criar transação (LancamentoDialog / TransactionForm), com campos pré-preenchidos a partir do pré-lançamento.
    - Ao salvar a transação: chamar `POST /pre-transactions/{id}/convert` (e no backend marcar como CONVERTED).
    - Isso já está parcialmente coberto no BrainCash (converter com dados atuais); melhorar seria apenas UX (abrir formulário de transação pré-preenchido em vez de converter direto).
 
@@ -133,14 +133,4 @@
 
 ---
 
-## 6. Referências de código OpenMonetis
-
-- Ações: `D:\HomeAssistant\source\openmonetis\app\(dashboard)\pre-lancamentos\actions.ts`
-- Dados/lista: `D:\HomeAssistant\source\openmonetis\app\(dashboard)\pre-lancamentos\data.ts`
-- UI página: `D:\HomeAssistant\source\openmonetis\components\pre-lancamentos\inbox-page.tsx`
-- Card e ações por item: `D:\HomeAssistant\source\openmonetis\components\pre-lancamentos\inbox-card.tsx`
-- Schema BD: `D:\HomeAssistant\source\openmonetis\db\schema.ts` (tabela `pre_lancamentos`)
-
----
-
-*Documento gerado para alinhar as ações de Pré-Lançamentos do BrainCash ao comportamento do OpenMonetis.*
+*Documento de planejamento das ações de Pré-Lançamentos no BrainCash.*

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import api from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -25,11 +25,13 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, CheckCircle, Trash2 } from "lucide-react"
+import { Plus, CheckCircle, Trash2, FileUp, Save } from "lucide-react"
 import { toast } from "sonner"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { PAYMENT_METHODS, CONDITIONS, type PaymentMethodId, type ConditionId } from "@/lib/transaction-form"
+import { CategoryIcon } from "@/components/categories/CategoryIcon"
 
 interface PreTransaction {
     id: number
@@ -64,6 +66,18 @@ const defaultProcessFormState = {
 export default function PreTransactions() {
     const [isOpen, setIsOpen] = useState(false)
     const [toDelete, setToDelete] = useState<PreTransaction | null>(null)
+    const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false)
+    const [filterCategory, setFilterCategory] = useState<"all" | "with" | "without">("all")
+    const [categorySelection, setCategorySelection] = useState<Record<number, string>>({})
+    const [applyCategoryDialog, setApplyCategoryDialog] = useState<{
+        pt: PreTransaction
+        categoryId: string
+        others: PreTransaction[]
+    } | null>(null)
+    const [importDialogOpen, setImportDialogOpen] = useState(false)
+    const [importAccountId, setImportAccountId] = useState("")
+    const [importCardId, setImportCardId] = useState("")
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const [processOpen, setProcessOpen] = useState(false)
     const [preTransactionToProcess, setPreTransactionToProcess] = useState<PreTransaction | null>(null)
     const [processFormData, setProcessFormData] = useState(defaultProcessFormState)
@@ -187,7 +201,133 @@ export default function PreTransactions() {
         },
     })
 
+    const deleteAllMutation = useMutation({
+        mutationFn: async () => {
+            const res = await api.delete<{ detail: string; deleted: number }>("/pre-transactions/")
+            return res.data
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions"] })
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions-count"] })
+            setDeleteAllConfirmOpen(false)
+            toast.success(data.detail || "Todos os pré-lançamentos foram removidos")
+        },
+        onError: (err: { response?: { data?: { detail?: string } } }) => {
+            toast.error(err.response?.data?.detail || "Erro ao remover")
+        },
+    })
+
+    const updateCategoryMutation = useMutation({
+        mutationFn: async ({
+            ids,
+            categoryId,
+        }: {
+            ids: number[]
+            categoryId: number
+        }) => {
+            await Promise.all(
+                ids.map((id) =>
+                    api.put(`/pre-transactions/${id}`, { category_id: categoryId })
+                )
+            )
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions"] })
+            setApplyCategoryDialog(null)
+            setCategorySelection((prev) => {
+                const next = { ...prev }
+                variables.ids.forEach((id) => delete next[id])
+                return next
+            })
+            if (variables.ids.length > 1) {
+                toast.success(`${variables.ids.length} pré-lançamentos atualizados`)
+            } else {
+                toast.success("Categoria atualizada")
+            }
+        },
+        onError: (err: { response?: { data?: { detail?: string } } }) => {
+            toast.error(err.response?.data?.detail || "Erro ao atualizar categoria")
+        },
+    })
+
+    const importInvoiceMutation = useMutation({
+        mutationFn: async ({
+            file,
+            accountId,
+            cardId,
+        }: {
+            file: File
+            accountId?: string
+            cardId?: string
+        }) => {
+            const formData = new FormData()
+            formData.append("file", file)
+            if (accountId) formData.append("account_id", accountId)
+            if (cardId) formData.append("card_id", cardId)
+            const res = await api.post<{
+                created: number
+                duplicates_skipped: number
+                total_extracted: number
+            }>("/pre-transactions/import-invoice", formData, {
+                headers: { "Content-Type": "multipart/form-data" },
+            })
+            return res.data
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions"] })
+            queryClient.invalidateQueries({ queryKey: ["pre-transactions-count"] })
+            const msg =
+                data.created > 0
+                    ? `${data.created} pré-lançamento(s) importado(s).`
+                    : "Nenhum novo pré-lançamento criado."
+            if (data.duplicates_skipped > 0) {
+                toast.success(`${msg} ${data.duplicates_skipped} duplicata(s) ignorada(s).`)
+            } else {
+                toast.success(msg)
+            }
+        },
+        onError: (err: { response?: { data?: { detail?: string } } }) => {
+            toast.error(err.response?.data?.detail || "Erro ao importar fatura")
+        },
+    })
+
     const pending = list.filter((x) => x.status === "PENDING")
+    const filteredPending =
+        filterCategory === "with"
+            ? pending.filter((x) => !!x.category_id)
+            : filterCategory === "without"
+              ? pending.filter((x) => !x.category_id)
+              : pending
+
+    const handleImportInvoiceClick = () => {
+        setImportAccountId("")
+        setImportCardId("")
+        setImportDialogOpen(true)
+    }
+
+    const handleImportDialogSelectPdf = () => {
+        if (!importAccountId && !importCardId) {
+            toast.error("Selecione uma conta ou um cartão.")
+            return
+        }
+        setImportDialogOpen(false)
+        fileInputRef.current?.click()
+    }
+
+    const handleImportInvoiceFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        e.target.value = ""
+        if (!file) return
+        if (!file.name.toLowerCase().endsWith(".pdf")) {
+            toast.error("Selecione um arquivo PDF.")
+            return
+        }
+        importInvoiceMutation.mutate({
+            file,
+            accountId: importAccountId || undefined,
+            cardId: importCardId || undefined,
+        })
+    }
 
     const handleSubmit = () => {
         if (!formData.description.trim()) {
@@ -288,23 +428,156 @@ export default function PreTransactions() {
             [categories, processFormData.transaction_type]
         )
 
+    const getCategoriesByType = useCallback(
+        (type: string) =>
+            (categories as { id: number; name: string; type: string }[])?.filter(
+                (c) => c.type === type
+            ) ?? [],
+        [categories]
+    )
+
+    const handleGravarCategory = (pt: PreTransaction) => {
+        const categoryId = categorySelection[pt.id] ?? pt.category_id?.toString() ?? ""
+        if (!categoryId) {
+            toast.error("Selecione uma categoria")
+            return
+        }
+        const others = pending.filter(
+            (p) => p.id !== pt.id && p.description === pt.description
+        )
+        if (others.length > 0) {
+            setApplyCategoryDialog({ pt, categoryId, others })
+        } else {
+            updateCategoryMutation.mutate({
+                ids: [pt.id],
+                categoryId: parseInt(categoryId, 10),
+            })
+        }
+    }
+
+    const handleApplyCategoryOnlyThis = () => {
+        if (!applyCategoryDialog) return
+        updateCategoryMutation.mutate({
+            ids: [applyCategoryDialog.pt.id],
+            categoryId: parseInt(applyCategoryDialog.categoryId, 10),
+        })
+    }
+
+    const handleApplyCategoryToAll = () => {
+        if (!applyCategoryDialog) return
+        const allIds = [
+            applyCategoryDialog.pt.id,
+            ...applyCategoryDialog.others.map((o) => o.id),
+        ]
+        updateCategoryMutation.mutate({
+            ids: allIds,
+            categoryId: parseInt(applyCategoryDialog.categoryId, 10),
+        })
+    }
+
+    const totalPendentes = useMemo(() => {
+        let total = 0
+        for (const pt of filteredPending) {
+            const amt = Number(pt.amount)
+            total += pt.transaction_type === "EXPENSE" ? amt : -amt
+        }
+        return total
+    }, [filteredPending])
+
     return (
         <div className="flex flex-col gap-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-3xl font-bold tracking-tight">
                     Pré-Lançamentos
                 </h2>
-                <Button onClick={() => setIsOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Novo
-                </Button>
+                <div className="flex gap-2">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        className="hidden"
+                        onChange={handleImportInvoiceFile}
+                    />
+                    <Button
+                        variant="outline"
+                        onClick={handleImportInvoiceClick}
+                        disabled={importInvoiceMutation.isPending}
+                    >
+                        <FileUp className="mr-2 h-4 w-4" />
+                        {importInvoiceMutation.isPending ? "Importando..." : "Importar fatura"}
+                    </Button>
+                    <Button onClick={() => setIsOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Novo
+                    </Button>
+                    {pending.length > 0 && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteAllConfirmOpen(true)}
+                            disabled={deleteAllMutation.isPending}
+                            className="text-destructive hover:text-destructive"
+                        >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Remover tudo
+                        </Button>
+                    )}
+                </div>
             </div>
+
+            {pending.length > 0 && (
+                <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Filtrar:</span>
+                        <div className="flex rounded-md border p-1" role="radiogroup" aria-label="Filtrar por categoria">
+                            <Button
+                                variant={filterCategory === "all" ? "secondary" : "ghost"}
+                                size="sm"
+                                onClick={() => setFilterCategory("all")}
+                            >
+                                Todos
+                            </Button>
+                            <Button
+                                variant={filterCategory === "with" ? "secondary" : "ghost"}
+                                size="sm"
+                                onClick={() => setFilterCategory("with")}
+                            >
+                                Com categoria
+                            </Button>
+                            <Button
+                                variant={filterCategory === "without" ? "secondary" : "ghost"}
+                                size="sm"
+                                onClick={() => setFilterCategory("without")}
+                            >
+                                Sem categoria
+                            </Button>
+                        </div>
+                    </div>
+                    <Card className="w-fit">
+                    <CardContent className="pt-6">
+                        <p className="text-sm text-muted-foreground">
+                            Total dos pré-lançamentos
+                        </p>
+                        <p className="text-2xl font-bold">
+                            {formatCurrency(totalPendentes)}
+                        </p>
+                    </CardContent>
+                </Card>
+                </div>
+            )}
 
             {isLoading ? (
                 <p className="text-muted-foreground">Carregando...</p>
             ) : pending.length === 0 ? (
                 <p className="text-muted-foreground">
                     Nenhum pré-lançamento pendente.
+                </p>
+            ) : filteredPending.length === 0 ? (
+                <p className="text-muted-foreground">
+                    {filterCategory === "with"
+                        ? "Nenhum pré-lançamento com categoria."
+                        : filterCategory === "without"
+                          ? "Nenhum pré-lançamento sem categoria."
+                          : "Nenhum pré-lançamento pendente."}
                 </p>
             ) : (
                 <div className="rounded-md border">
@@ -315,45 +588,96 @@ export default function PreTransactions() {
                                 <TableHead>Descrição</TableHead>
                                 <TableHead>Tipo</TableHead>
                                 <TableHead className="text-right">Valor</TableHead>
+                                <TableHead>Categoria</TableHead>
                                 <TableHead className="w-[120px]">Ações</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {pending.map((pt) => (
-                                <TableRow key={pt.id}>
-                                    <TableCell>
-                                        {formatDate(pt.transaction_date)}
-                                    </TableCell>
-                                    <TableCell>{pt.description}</TableCell>
-                                    <TableCell>{pt.transaction_type}</TableCell>
-                                    <TableCell className="text-right">
-                                        {formatCurrency(Number(pt.amount))}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex gap-2">
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => openProcessDialog(pt)}
-                                                disabled={
-                                                    processPreTransactionMutation.isPending
-                                                }
-                                                title="Processar: abrir formulário de lançamento"
-                                            >
-                                                <CheckCircle className="h-4 w-4" />
-                                                Processar
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() => setToDelete(pt)}
-                                            >
-                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {filteredPending.map((pt) => {
+                                const rowCategories = getCategoriesByType(pt.transaction_type)
+                                return (
+                                    <TableRow key={pt.id}>
+                                        <TableCell>
+                                            {formatDate(pt.transaction_date)}
+                                        </TableCell>
+                                        <TableCell>{pt.description}</TableCell>
+                                        <TableCell>{pt.transaction_type}</TableCell>
+                                        <TableCell className="text-right">
+                                            {formatCurrency(Number(pt.amount))}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                <Select
+                                                    value={
+                                                        categorySelection[pt.id] ??
+                                                        pt.category_id?.toString() ??
+                                                        ""
+                                                    }
+                                                    onValueChange={(v) =>
+                                                        setCategorySelection((prev) => ({
+                                                            ...prev,
+                                                            [pt.id]: v,
+                                                        }))
+                                                    }
+                                                >
+                                                    <SelectTrigger className="h-8 w-[160px]">
+                                                        <SelectValue placeholder="Selecione" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {rowCategories.map(
+                                                            (c: { id: number; name: string; icon?: string; color?: string }) => (
+                                                                <SelectItem
+                                                                    key={c.id}
+                                                                    value={String(c.id)}
+                                                                >
+                                                                    <span className="flex items-center gap-2">
+                                                                        <CategoryIcon icon={c.icon} color={c.color} className="h-4 w-4 shrink-0" />
+                                                                        {c.name}
+                                                                    </span>
+                                                                </SelectItem>
+                                                            )
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    onClick={() => handleGravarCategory(pt)}
+                                                    disabled={
+                                                        updateCategoryMutation.isPending
+                                                    }
+                                                    title="Gravar categoria"
+                                                >
+                                                    <Save className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => openProcessDialog(pt)}
+                                                    disabled={
+                                                        processPreTransactionMutation.isPending
+                                                    }
+                                                    title="Processar: abrir formulário de lançamento"
+                                                >
+                                                    <CheckCircle className="h-4 w-4" />
+                                                    Processar
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => setToDelete(pt)}
+                                                >
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                )
+                            })}
                         </TableBody>
                     </Table>
                 </div>
@@ -441,9 +765,12 @@ export default function PreTransactions() {
                                     <SelectValue placeholder="Opcional" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {categories.map((c: { id: number; name: string }) => (
+                                    {categories.map((c: { id: number; name: string; icon?: string; color?: string }) => (
                                         <SelectItem key={c.id} value={String(c.id)}>
-                                            {c.name}
+                                            <span className="flex items-center gap-2">
+                                                <CategoryIcon icon={c.icon} color={c.color} className="h-4 w-4 shrink-0" />
+                                                {c.name}
+                                            </span>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -501,6 +828,73 @@ export default function PreTransactions() {
                                 disabled={createMutation.isPending}
                             >
                                 Salvar
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Importar fatura: selecionar conta/cartão antes de escolher o PDF */}
+            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Importar fatura</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-muted-foreground">
+                        Para qual conta ou cartão enviar os lançamentos importados?
+                    </p>
+                    <div className="grid gap-4 py-4">
+                        <div>
+                            <Label>Conta</Label>
+                            <Select
+                                value={importAccountId}
+                                onValueChange={(v) => {
+                                    setImportAccountId(v)
+                                    if (v) setImportCardId("")
+                                }}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione a conta" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {accounts.map((a: { id: number; name: string }) => (
+                                        <SelectItem key={a.id} value={String(a.id)}>
+                                            {a.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label>ou Cartão</Label>
+                            <Select
+                                value={importCardId}
+                                onValueChange={(v) => {
+                                    setImportCardId(v)
+                                    if (v) setImportAccountId("")
+                                }}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione o cartão" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {cards.map((c: { id: number; name: string }) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => setImportDialogOpen(false)}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button onClick={handleImportDialogSelectPdf}>
+                                Selecionar PDF
                             </Button>
                         </div>
                     </div>
@@ -606,12 +1000,15 @@ export default function PreTransactions() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {filteredProcessCategories.map(
-                                        (c: { id: number; name: string }) => (
+                                        (c: { id: number; name: string; icon?: string; color?: string }) => (
                                             <SelectItem
                                                 key={c.id}
                                                 value={c.id.toString()}
                                             >
-                                                {c.name}
+                                                <span className="flex items-center gap-2">
+                                                    <CategoryIcon icon={c.icon} color={c.color} className="h-4 w-4 shrink-0" />
+                                                    {c.name}
+                                                </span>
                                             </SelectItem>
                                         )
                                     )}
@@ -833,6 +1230,73 @@ export default function PreTransactions() {
                             Remover
                         </Button>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete all confirm */}
+            <Dialog open={deleteAllConfirmOpen} onOpenChange={setDeleteAllConfirmOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Remover todos os pré-lançamentos</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-muted-foreground">
+                        Remover todos os {pending.length} pré-lançamento(s) pendente(s)?
+                        Útil para refazer uma importação. Esta ação não pode ser desfeita.
+                    </p>
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setDeleteAllConfirmOpen(false)}>
+                            Cancelar
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => deleteAllMutation.mutate()}
+                            disabled={deleteAllMutation.isPending}
+                        >
+                            {deleteAllMutation.isPending ? "Removendo..." : "Remover tudo"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Aplicar categoria aos mesmos: só este ou todos com mesma descrição */}
+            <Dialog
+                open={!!applyCategoryDialog}
+                onOpenChange={(open) => !open && setApplyCategoryDialog(null)}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Atribuir categoria</DialogTitle>
+                    </DialogHeader>
+                    {applyCategoryDialog && (
+                        <>
+                            <p className="text-muted-foreground">
+                                Existem {applyCategoryDialog.others.length} outro(s) pré-lançamento(s)
+                                com a descrição &quot;{applyCategoryDialog.pt.description}&quot;.
+                                Deseja atribuir a categoria a todos?
+                            </p>
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setApplyCategoryDialog(null)}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={handleApplyCategoryOnlyThis}
+                                    disabled={updateCategoryMutation.isPending}
+                                >
+                                    Só este
+                                </Button>
+                                <Button
+                                    onClick={handleApplyCategoryToAll}
+                                    disabled={updateCategoryMutation.isPending}
+                                >
+                                    Aplicar a todos
+                                </Button>
+                            </div>
+                        </>
+                    )}
                 </DialogContent>
             </Dialog>
         </div>

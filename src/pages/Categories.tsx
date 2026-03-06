@@ -9,6 +9,19 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -18,20 +31,21 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table"
-import { Plus, Pencil, Trash2, Tags } from "lucide-react"
+import { Plus, Pencil, Trash2, List, Info } from "lucide-react"
+import { CategoryIcon } from "@/components/categories/CategoryIcon"
 import { toast } from "sonner"
+
+interface DescriptionMapping {
+    id: number
+    description: string
+    created_at: string
+}
 
 export default function Categories() {
     const [isOpen, setIsOpen] = useState(false)
     const [editingId, setEditingId] = useState<number | null>(null)
+    const [descriptionsOpenForId, setDescriptionsOpenForId] = useState<number | null>(null)
+    const [descriptionForCategories, setDescriptionForCategories] = useState<string | null>(null)
 
     const [formData, setFormData] = useState({
         name: "",
@@ -50,6 +64,32 @@ export default function Categories() {
             const res = await api.get('/categories/')
             return res.data
         }
+    })
+
+    const { data: descriptionMappings = [] } = useQuery({
+        queryKey: ['category-description-mappings', descriptionsOpenForId],
+        queryFn: async () => {
+            if (!descriptionsOpenForId) return []
+            const res = await api.get<DescriptionMapping[]>(
+                `/categories/${descriptionsOpenForId}/description-mappings`
+            )
+            return res.data
+        },
+        enabled: !!descriptionsOpenForId,
+    })
+
+    const { data: mappingsByDescription = [] } = useQuery({
+        queryKey: ['mappings-by-description', descriptionForCategories],
+        queryFn: async () => {
+            if (!descriptionForCategories) return []
+            const res = await api.get<
+                { id: number; category_id: number; category_name: string }[]
+            >(`/categories/by-description/mappings`, {
+                params: { description: descriptionForCategories },
+            })
+            return res.data
+        },
+        enabled: !!descriptionForCategories,
     })
 
     // Mutations
@@ -83,6 +123,26 @@ export default function Categories() {
             toast.success("Categoria removida!")
         },
         onError: () => toast.error("Erro ao remover categoria")
+    })
+
+    const removeDescriptionMutation = useMutation({
+        mutationFn: async ({
+            categoryId,
+            mappingId,
+        }: {
+            categoryId: number
+            mappingId: number
+        }) =>
+            api.delete(
+                `/categories/${categoryId}/description-mappings/${mappingId}`
+            ),
+        onSuccess: (_, { categoryId }) => {
+            queryClient.invalidateQueries({
+                queryKey: ['category-description-mappings', categoryId],
+            })
+            toast.success("Descrição removida do mapeamento")
+        },
+        onError: () => toast.error("Erro ao remover descrição"),
     })
 
     // Handlers
@@ -123,9 +183,9 @@ export default function Categories() {
             <div className="flex items-center justify-between">
                 <h2 className="text-3xl font-bold tracking-tight">Categorias</h2>
                 <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
-                    <DialogTrigger asChild>
-                        <Button><Plus className="mr-2 h-4 w-4" /> Nova Categoria</Button>
-                    </DialogTrigger>
+                        <DialogTrigger asChild>
+                            <Button><Plus className="mr-2 h-4 w-4" /> Nova Categoria</Button>
+                        </DialogTrigger>
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>{editingId ? "Editar Categoria" : "Nova Categoria"}</DialogTitle>
@@ -172,14 +232,15 @@ export default function Categories() {
                             <TableHead>Cor</TableHead>
                             <TableHead>Nome</TableHead>
                             <TableHead>Tipo</TableHead>
-                            <TableHead className="w-[100px]"></TableHead>
+                            <TableHead>Descrições</TableHead>
+                            <TableHead className="w-[120px]"></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
-                            <TableRow><TableCell colSpan={4} className="text-center h-24">Carregando...</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={5} className="text-center h-24">Carregando...</TableCell></TableRow>
                         ) : categories?.length === 0 ? (
-                            <TableRow><TableCell colSpan={4} className="text-center h-24 text-muted-foreground">Nenhuma categoria cadastrada.</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={5} className="text-center h-24 text-muted-foreground">Nenhuma categoria cadastrada.</TableCell></TableRow>
                         ) : (
                             categories?.map((cat: any) => (
                                 <TableRow key={cat.id}>
@@ -187,13 +248,24 @@ export default function Categories() {
                                         <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: cat.color }}></div>
                                     </TableCell>
                                     <TableCell className="font-medium flex items-center gap-2">
-                                        <Tags className="h-4 w-4 text-muted-foreground" />
+                                        <CategoryIcon icon={cat.icon} color={cat.color} />
                                         {cat.name}
                                     </TableCell>
                                     <TableCell>
                                         <span className={cat.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
                                             {cat.type === 'INCOME' ? 'Receita' : 'Despesa'}
                                         </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setDescriptionsOpenForId(cat.id)}
+                                            title="Ver descrições relacionadas"
+                                        >
+                                            <List className="h-4 w-4 mr-1" />
+                                            Descrições
+                                        </Button>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex justify-end gap-2">
@@ -213,6 +285,130 @@ export default function Categories() {
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Dialog: descrições relacionadas à categoria */}
+            <Dialog
+                open={!!descriptionsOpenForId}
+                onOpenChange={(open) => !open && setDescriptionsOpenForId(null)}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            Descrições relacionadas
+                            {descriptionsOpenForId &&
+                                categories?.find((c: any) => c.id === descriptionsOpenForId) && (
+                                    <span className="font-normal text-muted-foreground">
+                                        {" "}
+                                        –{" "}
+                                        {
+                                            categories.find(
+                                                (c: any) => c.id === descriptionsOpenForId
+                                            )?.name
+                                        }
+                                    </span>
+                                )}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-muted-foreground">
+                        Descrições de lançamentos que serão automaticamente categorizados aqui.
+                    </p>
+                    {descriptionsOpenForId && (
+                        <div className="rounded-md border max-h-64 overflow-y-auto">
+                            {descriptionMappings.length === 0 ? (
+                                <p className="p-4 text-center text-muted-foreground text-sm">
+                                    Nenhuma descrição relacionada. Ao gravar a categoria em um
+                                    pré-lançamento, a descrição será vinculada aqui.
+                                </p>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Descrição</TableHead>
+                                            <TableHead className="w-[80px]"></TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {descriptionMappings.map((m: DescriptionMapping) => (
+                                            <TableRow key={m.id}>
+                                                <TableCell className="font-mono text-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        {m.description}
+                                                        <Popover
+                                                            onOpenChange={(open) =>
+                                                                setDescriptionForCategories(
+                                                                    open ? m.description : null
+                                                                )
+                                                            }
+                                                        >
+                                                            <PopoverTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-6 w-6"
+                                                                    title="Ver todas as categorias desta descrição"
+                                                                >
+                                                                    <Info className="h-4 w-4" />
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-80">
+                                                                <p className="font-medium text-sm mb-2">
+                                                                    Categorias relacionadas
+                                                                </p>
+                                                                {mappingsByDescription.length === 0 ? (
+                                                                    <p className="text-sm text-muted-foreground">
+                                                                        Carregando...
+                                                                    </p>
+                                                                ) : (
+                                                                    <ul className="text-sm space-y-1">
+                                                                        {mappingsByDescription.map(
+                                                                            (x) => (
+                                                                                <li
+                                                                                    key={x.id}
+                                                                                    className="flex items-center justify-between"
+                                                                                >
+                                                                                    {x.category_name}
+                                                                                    {x.category_id ===
+                                                                                        descriptionsOpenForId && (
+                                                                                        <span className="text-xs text-muted-foreground">
+                                                                                            (atual)
+                                                                                        </span>
+                                                                                    )}
+                                                                                </li>
+                                                                            )
+                                                                        )}
+                                                                    </ul>
+                                                                )}
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-destructive"
+                                                        onClick={() =>
+                                                            removeDescriptionMutation.mutate({
+                                                                categoryId: descriptionsOpenForId!,
+                                                                mappingId: m.id,
+                                                            })
+                                                        }
+                                                        disabled={
+                                                            removeDescriptionMutation.isPending
+                                                        }
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
